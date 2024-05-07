@@ -5,21 +5,38 @@ DB_USER="root"
 DB_PASS=""
 DB_NAME="pricetracker"
 
+# Function to check if URL already exists in the database
+checkURLExists() {
+    url=$1
+    exists=$(mysql -u"$DB_USER" -p"$DB_PASS" -D"$DB_NAME" -se "SELECT EXISTS(SELECT 1 FROM products WHERE URL = '$url');")
+    echo $exists
+}
+
+# Function to get existing product ID by URL
+getProductIDbyURL() {
+    local url=$1
+    local product_id=$(mysql -u"$DB_USER" -p"$DB_PASS" -D"$DB_NAME" -se "SELECT productID FROM products WHERE URL = '$url';")
+    echo $product_id
+}
+
 # Function to generate a new product ID
 generateProductID() {
-    max_product_id=$(mysql -u"$DB_USER" -p"$DB_PASS" -D"$DB_NAME" -se "SELECT MAX(productID) FROM products;")
-    if [ -z "$max_product_id" ] || [ "$max_product_id" == "NULL" ]; then
-        new_product_id="P001"
+    local url=$1
+    local url_exists=$(checkURLExists "$url")
+    if [ "$url_exists" -eq 1 ]; then
+        echo "exists"  # Indicates that the URL already exists, no need to generate a new ID
     else
-        current_number=$(echo "$max_product_id" | tail -n 1 | sed 's/P//')
-        if [ -z "$current_number" ]; then
+        local max_product_id=$(mysql -u"$DB_USER" -p"$DB_PASS" -D"$DB_NAME" -se "SELECT MAX(productID) FROM products;")
+        local new_product_id
+        if [ -z "$max_product_id" ] || [ "$max_product_id" == "NULL" ]; then
             new_product_id="P001"
         else
-            new_number=$((10#$current_number + 1))
+            local current_number=$(echo "$max_product_id" | tail -n 1 | sed 's/P//')
+            local new_number=$((10#$current_number + 1))
             new_product_id="P$(printf "%03d" "$new_number")"
         fi
+        echo "$new_product_id"
     fi
-    echo "$new_product_id"
 }
 
 # Function to generate a new details ID
@@ -77,18 +94,23 @@ insertIntoDatabase() {
     # Get the current datetime
     current_datetime=$(date '+%Y-%m-%d %H:%M:%S')
 
-    # Generate new product ID
-    new_product_id=$(generateProductID)
-    new_details_id=$(generateDetailsID)
-    new_track_id=$(generateTrackID)
-
     # Insert data into the products table
-    insert_data "products" "productID, productName, category, URL" "'$new_product_id', '$product_name', '$category', '$product_url'"
+    url_exists=$(checkURLExists "$product_url")
+    if [ "$url_exists" -eq 0 ]; then
+        new_product_id=$(generateProductID)
+        # Insert new product if URL does not exist
+        insert_data "products" "productID, productName, category, URL" "'$new_product_id', '$product_name', '$category', '$product_url'"
+    else
+        echo "No need to insert product; URL already exists."
+        new_product_id=$(getProductIDbyURL "$product_url") # Get existing productID if URL exists
+    fi
 
     # Insert data into the trackdetails table
+    new_track_id=$(generateTrackID)
     insert_data "trackdetails" "trackID, price, stock, dateCollected" "'$new_track_id', $price, $stock, '$current_datetime'"
 
     # Insert data into the productdetails table
+    new_details_id=$(generateDetailsID)
     insert_data "productdetails" "detailsID, productID, trackID" "'$new_details_id', '$new_product_id', '$new_track_id'"
 }
 
@@ -136,11 +158,11 @@ parseData() {
 
 # List of product URLs to track
 PRODUCT_URLS=(
-    "https://www.jsshoppu.com/showproducts/productid/4312336/cid/448063/laundry-cleaner-detergent-paper-tablet-pembersih-baju-%E6%B4%97%E8%A1%A3%E7%BA%B8-%E6%B3%A1%E6%B3%A1%E7%BA%B8/",
-    "https://www.jsshoppu.com/showproducts/productid/4312047/cid/448063/seamless-wall-hanging-mop-hook-bathroom-broom-hanger-%E5%BC%BA%E5%8A%9B%E6%97%A0%E7%97%95%E6%8B%96%E6%8A%8A%E5%A4%B9-%E5%85%8D%E6%89%93%E5%AD%94%E6%8C%82%E6%89%AB%E6%8A%8A%E6%9E%B6-1-pc/",
-    "https://www.jsshoppu.com/showproducts/productid/4308930/cid/448063/simple-towel-hanger-towel-holder-pemegang-tuala-rak-tuala-%E6%AF%9B%E5%B7%BE%E6%9E%B6/",
-    "https://www.jsshoppu.com/showproducts/productid/4308972/cid/448063/creative-2l-gradient-frosted-colorful-scale-straw-portable-water-bottle-%E6%B8%90%E5%8F%98%E8%89%B2%E7%A3%A8%E7%A0%82%E7%82%AB%E5%BD%A9%E5%88%BB%E5%BA%A6%E5%90%B8%E7%AE%A1%E4%BE%BF%E6%90%BA%E6%B0%B4%E7%93%B6/",
-    "https://www.jsshoppu.com/showproducts/productid/4312065/cid/448063/super-clean-gel-compound-cleaning-gel-jelly-dust-cleaning-80g%E5%8D%A4/"
+    https://www.publicpackaging.com/showproducts/productid/4312040/cid/448076/11pcs-foodgrade-silicone-kitchen-measuring-tools-ready-stock-measuring-spoon/
+    https://www.publicpackaging.com/showproducts/productid/4312333/cid/448072/super-clean-gel-compound-cleaning-gel-jelly-dust-cleaning-70g%E5%8D%A4/,
+    https://www.publicpackaging.com/showproducts/productid/4312382/cid/448073/dish-wash-pure-colour-pad-2-pcs-in-1-pack/,
+    https://www.publicpackaging.com/showproducts/productid/4312283/cid/448072/creative-desktop-shake-lid-mini-trash-bin-%E5%88%9B%E6%84%8F%E6%A1%8C%E9%9D%A2%E6%91%87%E7%9B%96%E8%BF%B7%E4%BD%A0%E5%9E%83%E5%9C%BE%E6%A1%B6/,
+    https://www.publicpackaging.com/showproducts/productid/4312254/cid/448073/kitchen-knife-3pcs-set-fruit-knife-pemotong-sayur-dadu-multi-slicer-%E6%B0%B4%E7%9A%AE%E6%B0%B4%E6%9E%9C%E5%88%80%E6%B2%BE%E6%9D%BF%E4%B8%89%E4%BB%B6%E5%A5%97/
 )
 
 for URL in "${PRODUCT_URLS[@]}"; do
@@ -158,8 +180,3 @@ for URL in "${PRODUCT_URLS[@]}"; do
     echo "Web data successfully fetched and saved to $OUTPUT_FILE"
     parseData "$OUTPUT_FILE" "$PRODUCT_NAME" "$URL" 
 done
-
-
-# 5. Crontab setup
-
-## Error handling, such as what if network is down or the website itself is down while the script is running, or what if the website blocks your script 
