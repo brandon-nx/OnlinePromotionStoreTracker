@@ -310,7 +310,7 @@ CREATE TABLE IF NOT EXISTS `trackdetails` (
   PRIMARY KEY (`trackID`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- Dumping data for table pricetracker.trackdetails: ~255 rows (approximately)
+-- Dumping data for table pricetracker.trackdetails: ~243 rows (approximately)
 INSERT INTO `trackdetails` (`trackID`, `price`, `stock`, `dateCollected`) VALUES
 	('T001', 7.9, 21, '2024-05-07 22:00:04'),
 	('T002', 3, 437, '2024-05-07 22:00:07'),

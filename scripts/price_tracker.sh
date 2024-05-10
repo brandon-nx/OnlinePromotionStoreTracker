@@ -32,7 +32,7 @@ generateProductID() {
             new_product_id="P001"
         else
             local current_number=$(echo "$max_product_id" | tail -n 1 | sed 's/P//')
-            local new_number=$((10#$current_number + 1))
+            local new_henumber=$((10#$current_number + 1))
             new_product_id="P$(printf "%03d" "$new_number")"
         fi
         echo "$new_product_id"
