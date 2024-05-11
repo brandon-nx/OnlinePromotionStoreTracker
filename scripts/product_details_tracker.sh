@@ -99,7 +99,9 @@ insertIntoDatabase() {
     if [ "$url_exists" -eq 0 ]; then
         new_product_id=$(generateProductID)
         # Insert new product if URL does not exist
-        insert_data "products" "productID, productName, category, URL" "'$new_product_id', '$product_name', '$category', '$product_url'"
+        if ! insert_data "products" "productID, productName, category, URL" "'$new_product_id', '$product_name', '$category', '$product_url'"; then
+            return 1
+        fi
     else
         echo "No need to insert product; URL already exists."
         new_product_id=$(getProductIDbyURL "$product_url") # Get existing productID if URL exists
@@ -107,12 +109,17 @@ insertIntoDatabase() {
 
     # Insert data into the trackdetails table
     new_track_id=$(generateTrackID)
-    insert_data "trackdetails" "trackID, price, stock, dateCollected" "'$new_track_id', $price, $stock, '$current_datetime'"
+    if ! insert_data "trackdetails" "trackID, price, stock, dateCollected" "'$new_track_id', $price, $stock, '$current_datetime'"; then
+        return 1
+    fi
 
     # Insert data into the productdetails table
     new_details_id=$(generateDetailsID)
-    insert_data "productdetails" "detailsID, productID, trackID" "'$new_details_id', '$new_product_id', '$new_track_id'"
+    if ! insert_data "productdetails" "detailsID, productID, trackID" "'$new_details_id', '$new_product_id', '$new_track_id'"; then
+        return 1
+    fi
 }
+
 
 
 # 3. Data Manipulation (Data manipulation complexity, such as arranging data to array, converting to number or date, etc)
@@ -122,6 +129,18 @@ dataManipulation() {
     local stock="$3"
     local category="$4"
     local product_url="$5"
+    
+    # Check if price is a valid number
+    if ! [[ $price =~ ^[0-9]+(\.[0-9]+)?$ ]]; then
+        echo "Error: Invalid price format for product: $product_name"
+        return 1
+    fi
+    
+    # Check if stock is a valid integer
+    if ! [[ $stock =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid stock format for product: $product_name"
+        return 1
+    fi
     
     # Convert price to a float if it's not already
     price=$(printf "%.2f" "$price")
@@ -133,7 +152,7 @@ dataManipulation() {
     insertIntoDatabase "$product_name" "$price" "$stock" "$category" "$product_url"
 }
 
-# 2. Parsing Data (Data parsing complexity - Getting the right data and cleaning them)
+
 parseData() {
     local file="$1"
     local product_name="$2"
@@ -141,16 +160,29 @@ parseData() {
     
     # Parse price
     price=$(grep -oP 'product:price:amount" content="\K[\d.]+' "$file")
+    if [ -z "$price" ]; then
+        echo "Error: Price not found for product: $product_name"
+        return 1
+    fi
 
     # Parse stock
     stock=$(awk 'BEGIN{RS="<"; FS=">"; IGNORECASE=1} /class="product_qty_availble"/ && !found {print $2; found=1}' "$file" | grep -oP '\d+' | head -n 1 | tr -d '\n')
+    if [ -z "$stock" ]; then
+        echo "Error: Stock not found for product: $product_name"
+        return 1
+    fi
 
     # Parse category
     category=$(grep -oP 'property="product:category" content="\K[^"]+' "$file")
+    if [ -z "$category" ]; then
+        echo "Error: Category not found for product: $product_name"
+        return 1
+    fi
     
     echo "Parsed Data: Product: $product_name, Price: RM$price, Stock: $stock, Category: $category"
     dataManipulation "$product_name" "$price" "$stock" "$category" "$product_url"
 }
+
 
 
 
